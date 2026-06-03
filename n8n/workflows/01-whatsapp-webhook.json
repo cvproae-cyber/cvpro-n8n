@@ -1,0 +1,227 @@
+{
+  "name": "CVPro - WhatsApp AI Agent (Full Stack)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wa-verify-webhook",
+      "name": "WhatsApp Verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 100],
+      "webhookId": "cvpro-wa-verify"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { verifyMetaWebhook } = require('/home/node/scripts/cvpro-helpers.js');\nconst query = $input.first().json.query || {};\nconst result = verifyMetaWebhook(query, process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN);\nreturn [{ json: result }];"
+      },
+      "id": "wa-verify-code",
+      "name": "Verify Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.verified ? $json.challenge : 'Forbidden' }}",
+        "options": {
+          "responseCode": "={{ $json.verified ? 200 : 403 }}"
+        }
+      },
+      "id": "wa-verify-respond",
+      "name": "Return Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [750, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wa-webhook",
+      "name": "WhatsApp Webhook (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "cvpro-wa-main"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": { "responseCode": 200 }
+      },
+      "id": "wa-ack",
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst entry = body?.entry?.[0];\nconst change = entry?.changes?.[0];\nconst value = change?.value;\nconst message = value?.messages?.[0];\nif (!message) return [];\nconst from = message.from;\nconst msgType = message.type;\nlet text = '';\nlet mediaId = null;\nlet mimeType = '';\nlet caption = '';\nif (msgType === 'text') {\n  text = message.text?.body || '';\n} else if (msgType === 'document') {\n  mediaId = message.document?.id;\n  mimeType = message.document?.mime_type;\n  caption = message.document?.caption || '';\n  text = caption;\n} else if (msgType === 'image') {\n  mediaId = message.image?.id;\n  mimeType = message.image?.mime_type;\n  caption = message.image?.caption || '';\n  text = caption;\n} else if (msgType === 'audio') {\n  mediaId = message.audio?.id;\n  mimeType = message.audio?.mime_type;\n  text = '[voice_message]';\n} else if (msgType === 'voice') {\n  mediaId = message.voice?.id;\n  mimeType = message.voice?.mime_type;\n  text = '[voice_note]';\n}\nreturn [{\n  json: {\n    from,\n    text,\n    msgType,\n    mediaId,\n    mimeType,\n    filename: message.document?.filename || 'uploaded_cv',\n    phoneNumberId: value?.metadata?.phone_number_id,\n    timestamp: message.timestamp,\n    profileName: value?.contacts?.[0]?.profile?.name || ''\n  }\n}];"
+      },
+      "id": "wa-extract",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst { getOrCreateCustomer, getOrCreateConversation, saveMessage } = require('/home/node/scripts/cvpro-helpers.js');\n\nconst customer = await getOrCreateCustomer($http, {\n  phone_number: input.from,\n  full_name: input.profileName,\n});\nconst conversation = await getOrCreateConversation($http, customer.id, 'whatsapp');\n\nif (input.msgType === 'text' && input.text) {\n  await saveMessage($http, conversation.id, 'inbound', input.text, {\n    content_type: 'text',\n    is_ai_generated: false,\n  });\n}\n\nreturn [{\n  json: {\n    ...input,\n    customerId: customer.id,\n    conversationId: conversation.id,\n    humanTakeover: conversation.human_takeover,\n  },\n}];"
+      },
+      "id": "wa-setup",
+      "name": "Setup Customer & Conversation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.msgType }}",
+              "rightValue": "text",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "wa-is-text",
+      "name": "Is Text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst MEDIA_TYPES = ['document', 'image', 'audio', 'voice'];\nif (!MEDIA_TYPES.includes(input.msgType)) return [];\n\nconst token = process.env.WHATSAPP_ACCESS_TOKEN;\nconst mediaUrlResp = await $http.request({\n  method: 'GET',\n  url: `https://graph.facebook.com/v21.0/${input.mediaId}`,\n  headers: { Authorization: `Bearer ${token}` },\n});\nconst fileBuffer = await $http.request({\n  method: 'GET',\n  url: mediaUrlResp.url,\n  encoding: 'arraybuffer',\n});\n\nreturn [{ json: { ...input, fileBuffer } }];"
+      },
+      "id": "wa-download-media",
+      "name": "Download Media",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\nconst { saveMessage } = require('/home/node/scripts/cvpro-helpers.js');\nconst { fileBuffer, mimeType, msgType, conversationId } = $input.first().json;\nconst base64 = Buffer.from(fileBuffer).toString('base64');\nconst prompt = msgType === 'voice' || msgType === 'audio'\n  ? 'Transcribe this audio message accurately. Return only the transcription text.'\n  : 'Extract all text from this document/image. Return only the extracted text. If it is a CV or resume, note that.';\n\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nconst parts = [{ text: prompt }, { inlineData: { mimeType: mimeType || 'application/octet-stream', data: base64 } }];\nlet extractedText = '';\ntry {\n  const res = await $http.request({\n    method: 'POST',\n    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEYS.split(',')[0]}`,\n    headers: { 'Content-Type': 'application/json' },\n    body: {\n      contents: [{ parts }],\n      generationConfig: { temperature: 0.2, maxOutputTokens: 2000 },\n    },\n  });\n  extractedText = res.candidates?.[0]?.content?.parts?.[0]?.text || '';\n} catch (_) {\n  extractedText = await rotator.call(prompt, '', 2000, 0.2);\n}\n\nif (conversationId && extractedText) {\n  const contentType = msgType === 'document' ? 'document' : msgType === 'image' ? 'image' : 'voice_note';\n  await saveMessage($http, conversationId, 'inbound', extractedText, {\n    content_type: contentType,\n    is_ai_generated: false,\n  });\n}\n\nreturn [{ json: { ...$input.first().json, extractedText, text: extractedText } }];"
+      },
+      "id": "wa-ocr-transcribe",
+      "name": "OCR / Transcription",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\nconst { saveCvAnalysis } = require('/home/node/scripts/cvpro-helpers.js');\nconst input = $input.first().json;\nconst text = input.text || input.extractedText;\n\nif (!text || text.length < 50) {\n  return [{ json: { ...input, skipCV: true } }];\n}\n\nconst isLikelyCV = /CV|resume|خبرات|المهارات|experience|education/i.test(text) || text.length > 200;\nif (!isLikelyCV) {\n  return [{ json: { ...input, skipCV: true } }];\n}\n\nconst systemPrompt = `You are an expert ATS and CV analyzer for the UAE/Gulf job market. Return JSON with: ats_score, formatting_score, keyword_score, readability_score, achievements_score, grammar_score, linkedin_compatibility_score, uae_gulf_score (all 0-100), weaknesses (array), improvement_suggestions (array), sales_pitch (Arabic), personalized_offer (object). Return ONLY valid JSON.`;\n\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nlet analysis = null;\ntry {\n  analysis = await rotator.callJSON(text.substring(0, 6000), systemPrompt);\n} catch (_) {\n  return [{ json: { ...input, skipCV: true, cvError: true } }];\n}\n\nif (input.customerId) {\n  await saveCvAnalysis($http, input.customerId, text, analysis, input.filename || 'uploaded_cv');\n}\n\nreturn [{ json: { ...input, cvAnalysis: analysis } }];"
+      },
+      "id": "wa-cv-analyzer",
+      "name": "CV Analyzer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "const {\n  getMessageHistory,\n  formatHistory,\n  saveMessage,\n  updateCustomer,\n} = require('/home/node/scripts/cvpro-helpers.js');\nconst { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\nconst { UpstashRedis } = require('/home/node/scripts/upstash-redis-adapter.js');\n\nconst input = $input.first().json;\nconst userText = input.text || input.extractedText || '';\nconst { from, customerId, conversationId, phoneNumberId, cvAnalysis, humanTakeover } = input;\n\nif (humanTakeover) {\n  return [{ json: { skipReply: true, from, phoneNumberId } }];\n}\n\nif (!userText.trim()) {\n  return [{ json: { reply: 'شكراً لتواصلك! كيف يمكنني مساعدتك؟ 😊', from, phoneNumberId } }];\n}\n\ntry {\n  const redis = new UpstashRedis();\n  const { allowed } = await redis.checkRateLimit(`ratelimit:wa:${from}`, 20, 60);\n  if (!allowed) {\n    return [{ json: { reply: 'يرجى الانتظار قليلاً ثم حاول مجدداً. 🙏', from, phoneNumberId } }];\n  }\n} catch (_) {}\n\nconst messages = await getMessageHistory($http, conversationId, 10);\nconst history = formatHistory(messages);\n\nconst cvContext = cvAnalysis\n  ? `\\nتحليل السيرة: نقاط الضعف: ${(cvAnalysis.weaknesses || []).join(', ')}. اقتراحات: ${(cvAnalysis.improvement_suggestions || cvAnalysis.improvements || []).join(', ')}.`\n  : '';\n\nconst systemPrompt = `أنت وكيل مبيعات محترف لـ CVPro.ae (الإمارات والخليج).\nالأسعار: Essential CV 399 | LinkedIn Pro 299 | Career Boost 599 | Executive 999 درهم.\nردود قصيرة (<200 كلمة). بالعربية أو الإنجليزية حسب العميل.\nإذا طلب بشري، قل أنك ستحوله لخبير.\nالمحادثة:\\n${history}${cvContext}`;\n\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nlet aiReply = '';\ntry {\n  aiReply = await rotator.call(userText, systemPrompt, 350, 0.7);\n} catch (_) {\n  aiReply = 'شكراً لتواصلك مع CVPro.ae! كيف يمكنني مساعدتك اليوم؟ 😊';\n}\n\nawait saveMessage($http, conversationId, 'outbound', aiReply, {\n  is_ai_generated: true,\n  ai_model: 'gemini-2.5-flash',\n});\n\nconst needsHuman = /حولك|خبير|بشري|human/i.test(aiReply);\nif (needsHuman) {\n  await $http.request({\n    method: 'PATCH',\n    url: `${process.env.SUPABASE_URL}/rest/v1/conversations?id=eq.${conversationId}`,\n    headers: {\n      apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,\n      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,\n      'Content-Type': 'application/json',\n    },\n    body: { human_takeover: true, status: 'pending_human' },\n  });\n}\n\nconst patch = { last_interaction: new Date().toISOString() };\nif (cvAnalysis) patch.lead_stage = 'analysis_done';\nawait updateCustomer($http, customerId, patch);\n\nreturn [{ json: { reply: aiReply, from, phoneNumberId, customerId, conversationId, humanTakeover: needsHuman } }];"
+      },
+      "id": "wa-sales-agent",
+      "name": "AI Sales Agent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skipReply }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ]
+        }
+      },
+      "id": "wa-should-reply",
+      "name": "Should Reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.phoneNumberId || $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WHATSAPP_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"messaging_product\":\"whatsapp\",\"to\":\"{{ $json.from }}\",\"type\":\"text\",\"text\":{\"body\":\"{{ $json.reply }}\"}}"
+      },
+      "id": "wa-send",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, 300]
+    }
+  ],
+  "connections": {
+    "WhatsApp Verify (GET)": {
+      "main": [[{ "node": "Verify Token", "type": "main", "index": 0 }]]
+    },
+    "Verify Token": {
+      "main": [[{ "node": "Return Challenge", "type": "main", "index": 0 }]]
+    },
+    "WhatsApp Webhook (POST)": {
+      "main": [[{ "node": "Acknowledge", "type": "main", "index": 0 }, { "node": "Extract Message", "type": "main", "index": 0 }]]
+    },
+    "Extract Message": {
+      "main": [[{ "node": "Setup Customer & Conversation", "type": "main", "index": 0 }]]
+    },
+    "Setup Customer & Conversation": {
+      "main": [[{ "node": "Is Text?", "type": "main", "index": 0 }]]
+    },
+    "Is Text?": {
+      "main": [
+        [{ "node": "AI Sales Agent", "type": "main", "index": 0 }],
+        [{ "node": "Download Media", "type": "main", "index": 0 }]
+      ]
+    },
+    "Download Media": {
+      "main": [[{ "node": "OCR / Transcription", "type": "main", "index": 0 }]]
+    },
+    "OCR / Transcription": {
+      "main": [[{ "node": "CV Analyzer", "type": "main", "index": 0 }]]
+    },
+    "CV Analyzer": {
+      "main": [[{ "node": "AI Sales Agent", "type": "main", "index": 0 }]]
+    },
+    "AI Sales Agent": {
+      "main": [[{ "node": "Should Reply?", "type": "main", "index": 0 }]]
+    },
+    "Should Reply?": {
+      "main": [[{ "node": "Send WhatsApp Reply", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

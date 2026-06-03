@@ -1,0 +1,31 @@
+{
+  "name": "CVPro - Human Takeover",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "human-takeover",
+        "responseMode": "responseNode"
+      },
+      "id": "ht-webhook",
+      "name": "Takeover Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { setHumanTakeover, sbRequest, saveMessage } = require('/home/node/scripts/cvpro-helpers.js');\nconst { conversationId, customerId, agentEmail } = $input.first().json.body;\n\nawait setHumanTakeover($http, conversationId, agentEmail);\n\nconst customers = await sbRequest($http, 'GET', `/rest/v1/customers?id=eq.${customerId}&select=phone_number,full_name&limit=1`);\nconst customer = customers?.[0];\nconst handoffMsg = 'شكراً لتواصلك مع CVPro.ae! سيتم تحويلك إلى أحد خبرائنا الذين سيردون عليك خلال دقائق. 😊';\n\nawait saveMessage($http, conversationId, 'outbound', handoffMsg, { is_ai_generated: false });\n\nif (customer?.phone_number) {\n  await $http.request({\n    method: 'POST',\n    url: `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,\n    headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },\n    body: { messaging_product: 'whatsapp', to: customer.phone_number, type: 'text', text: { body: handoffMsg } },\n  });\n}\n\nreturn [{ json: { success: true, conversationId, assignedTo: agentEmail, notifiedVia: 'supabase_realtime' } }];"
+      },
+      "id": "ht-assign",
+      "name": "Assign to Agent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Takeover Trigger": { "main": [[{ "node": "Assign to Agent", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

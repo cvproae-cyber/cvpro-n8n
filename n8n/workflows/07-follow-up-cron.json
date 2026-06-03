@@ -1,0 +1,29 @@
+{
+  "name": "CVPro - Automated Follow-ups",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "hours": 24 }] }
+      },
+      "id": "fu-cron",
+      "name": "Daily at 9am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { sbRequest, getOrCreateConversation, saveMessage } = require('/home/node/scripts/cvpro-helpers.js');\nconst threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString();\nconst staleLeads = await sbRequest(\n  $http,\n  'GET',\n  `/rest/v1/customers?lead_stage=in.(offer_sent,negotiation)&last_interaction=lt.${threeDaysAgo}&phone_number=not.is.null&select=id,phone_number,full_name`\n);\nconst results = [];\nfor (const lead of staleLeads || []) {\n  const followupMsg = `مرحباً ${lead.full_name || 'عميلنا'}، لم نسمع منك بخصوص عرضنا. هل تريد مساعدة إضافية؟ لدينا خصم 15% اليوم فقط!`;\n  try {\n    await $http.request({\n      method: 'POST',\n      url: `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,\n      headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },\n      body: { messaging_product: 'whatsapp', to: lead.phone_number, type: 'text', text: { body: followupMsg } },\n    });\n    const conv = await getOrCreateConversation($http, lead.id, 'whatsapp');\n    await saveMessage($http, conv.id, 'outbound', followupMsg, { is_ai_generated: true });\n    results.push({ leadId: lead.id, followupSent: true });\n  } catch (_) {\n    results.push({ leadId: lead.id, followupSent: false });\n  }\n}\nreturn [{ json: results }];"
+      },
+      "id": "fu-send",
+      "name": "Send Follow-ups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Daily at 9am": { "main": [[{ "node": "Send Follow-ups", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

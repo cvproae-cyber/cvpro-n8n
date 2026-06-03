@@ -1,0 +1,54 @@
+{
+  "name": "CVPro - CV Analyzer (Manual / Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cv-analyze",
+        "responseMode": "responseNode"
+      },
+      "id": "cv-webhook",
+      "name": "CV Upload Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "cvpro-cv-analyzer"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\":\"processing\",\"analysisId\":\"{{ $json.analysisId }}\"}"
+      },
+      "id": "cv-ack",
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\nconst body = $input.first().json.body;\nconst fileBuffer = await $http.request({ method: 'GET', url: body.fileUrl, encoding: 'arraybuffer' });\nconst base64 = Buffer.from(fileBuffer).toString('base64');\nconst mime = body.mimeType || 'application/pdf';\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nconst res = await $http.request({\n  method: 'POST',\n  url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEYS.split(',')[0]}`,\n  headers: { 'Content-Type': 'application/json' },\n  body: {\n    contents: [{ parts: [{ text: 'Extract all text from this CV/resume. Return only the text.' }, { inlineData: { mimeType: mime, data: base64 } }] }],\n    generationConfig: { temperature: 0.2 },\n  },\n});\nconst extractedText = res.candidates?.[0]?.content?.parts?.[0]?.text || '';\nreturn [{ json: { extractedText, customerId: body.customerId, filename: body.filename || 'uploaded_cv' } }];"
+      },
+      "id": "cv-extract",
+      "name": "Extract Text from File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\nconst { saveCvAnalysis } = require('/home/node/scripts/cvpro-helpers.js');\nconst { extractedText, customerId, filename } = $input.first().json;\nconst systemPrompt = `You are ATS expert for UAE/Gulf market. Return JSON: ats_score, formatting_score, keyword_score, readability_score, achievements_score, grammar_score, linkedin_compatibility_score, uae_gulf_score (0-100), weaknesses[], improvement_suggestions[], sales_pitch, personalized_offer.`;\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nconst analysis = await rotator.callJSON(extractedText.substring(0, 6000), systemPrompt);\nconst record = await saveCvAnalysis($http, customerId, extractedText, analysis, filename);\nreturn [{ json: { analysis, analysisId: record.id } }];"
+      },
+      "id": "cv-score",
+      "name": "Score & Save",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 400]
+    }
+  ],
+  "connections": {
+    "CV Upload Webhook": { "main": [[{ "node": "Acknowledge", "type": "main", "index": 0 }, { "node": "Extract Text from File", "type": "main", "index": 0 }]] },
+    "Extract Text from File": { "main": [[{ "node": "Score & Save", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

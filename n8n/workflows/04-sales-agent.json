@@ -1,0 +1,31 @@
+{
+  "name": "CVPro - Sales Agent Core (Reusable)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sales-agent",
+        "responseMode": "responseNode"
+      },
+      "id": "sa-webhook",
+      "name": "Sales Agent API",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\nconst { customerId, userMessage, conversationHistory, cvAnalysis } = $input.first().json.body;\nconst cvContext = cvAnalysis ? JSON.stringify(cvAnalysis) : 'none';\nconst systemPrompt = `أنت وكيل مبيعات CVPro.ae (الإمارات). الأسعار: Essential 399 | LinkedIn 299 | Career Boost 599 | Executive 999 درهم. ردود قصيرة.\\nتحليل CV: ${cvContext}\\nالمحادثة:\\n${conversationHistory}\\nرسالة العميل: ${userMessage}`;\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nconst reply = await rotator.call(userMessage, systemPrompt, 300, 0.7);\nreturn [{ json: { reply, customerId } }];"
+      },
+      "id": "sa-agent",
+      "name": "AI Sales Agent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Sales Agent API": { "main": [[{ "node": "AI Sales Agent", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

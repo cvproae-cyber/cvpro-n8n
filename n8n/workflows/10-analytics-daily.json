@@ -1,0 +1,29 @@
+{
+  "name": "CVPro - Daily Analytics Aggregator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "hours": 24 }] }
+      },
+      "id": "an-cron",
+      "name": "Run at midnight",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { sbRequest } = require('/home/node/scripts/cvpro-helpers.js');\nconst yesterday = new Date(Date.now() - 86400000).toISOString();\nconst yDate = yesterday.split('T')[0];\n\nconst convCount = await sbRequest($http, 'GET', `/rest/v1/conversations?created_at=gte.${yesterday}&select=id`);\nconst humanTakeover = await sbRequest($http, 'GET', `/rest/v1/conversations?created_at=gte.${yesterday}&human_takeover=eq.true&select=id`);\nconst qualified = await sbRequest($http, 'GET', `/rest/v1/customers?lead_stage=eq.qualified&updated_at=gte.${yesterday}&select=id`);\nconst cvsAnalyzed = await sbRequest($http, 'GET', `/rest/v1/cv_analyses?created_at=gte.${yesterday}&select=id`);\nconst won = await sbRequest($http, 'GET', `/rest/v1/customers?lead_stage=eq.won&updated_at=gte.${yesterday}&select=id`);\nconst offers = await sbRequest($http, 'GET', `/rest/v1/customers?lead_stage=in.(offer_sent,negotiation)&updated_at=gte.${yesterday}&select=id`);\n\nconst totalConv = convCount?.length || 0;\nconst htCount = humanTakeover?.length || 0;\nconst revenueAed = (won?.length || 0) * 599;\n\nawait sbRequest($http, 'POST', '/rest/v1/daily_analytics', {\n  date: yDate,\n  total_conversations: totalConv,\n  ai_resolved: Math.max(0, totalConv - htCount),\n  human_takeover: htCount,\n  leads_qualified: qualified?.length || 0,\n  cvs_analyzed: cvsAnalyzed?.length || 0,\n  offers_sent: offers?.length || 0,\n  sales_won: won?.length || 0,\n  revenue_aed: revenueAed,\n  avg_response_time_seconds: 45,\n}, { Prefer: 'resolution=merge-duplicates' });\n\nreturn [{ json: { date: yDate, revenue: revenueAed } }];"
+      },
+      "id": "an-aggregate",
+      "name": "Aggregate Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Run at midnight": { "main": [[{ "node": "Aggregate Metrics", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

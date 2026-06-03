@@ -1,0 +1,8 @@
+.vs/
+[Db]bin/
+[Db]obj/
+*.user
+*.suo
+cvpro-crm/node_modules/
+cvpro-crm/.next/
+cvpro-crm/out/

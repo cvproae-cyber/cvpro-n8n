@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --card: 222 47% 14%;
+    --card-foreground: 210 40% 98%;
+    --card-border: 217 33% 20%;
+    --popover: 222 47% 14%;
+    --popover-foreground: 210 40% 98%;
+    --popover-border: 217 33% 20%;
+    --primary: 43 74% 49%;
+    --primary-foreground: 222 47% 11%;
+    --primary-border: hsl(43 74% calc(49% + 9%));
+    --secondary: 173 80% 40%;
+    --secondary-foreground: 0 0% 100%;
+    --secondary-border: hsl(173 80% calc(40% + 9%));
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --muted-border: hsl(217 33% calc(17% + 9%));
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --accent-border: hsl(217 33% calc(17% + 9%));
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+    --destructive-border: hsl(0 62% calc(30% + 9%));
+    --input: 217 33% 17%;
+    --ring: 43 74% 49%;
+    --radius: 0.5rem;
+
+    --sidebar: 222 47% 10%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-primary: 43 74% 49%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-ring: 43 74% 49%;
+
+    --button-outline: rgba(255,255,255,0.1);
+    --badge-outline: rgba(255,255,255,0.05);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

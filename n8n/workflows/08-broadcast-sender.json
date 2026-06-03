@@ -1,0 +1,31 @@
+{
+  "name": "CVPro - Broadcast Sender",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "broadcast",
+        "responseMode": "responseNode"
+      },
+      "id": "bc-webhook",
+      "name": "Broadcast Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { sbRequest } = require('/home/node/scripts/cvpro-helpers.js');\nconst { broadcastId, templateName, audienceFilter } = $input.first().json.body;\nlet query = `/rest/v1/customers?select=id,phone_number&phone_number=not.is.null`;\nif (audienceFilter?.lead_stage) query += `&lead_stage=eq.${audienceFilter.lead_stage}`;\nconst customers = await sbRequest($http, 'GET', query);\nconst templates = await sbRequest($http, 'GET', `/rest/v1/templates?name=eq.${templateName}&limit=1`);\nconst messageBody = templates?.[0]?.content || '';\nlet sent = 0, failed = 0;\nfor (const cust of customers || []) {\n  try {\n    await $http.request({\n      method: 'POST',\n      url: `https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,\n      headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },\n      body: { messaging_product: 'whatsapp', to: cust.phone_number, type: 'text', text: { body: messageBody.replace('{{full_name}}', cust.full_name || 'عميلنا') } },\n    });\n    sent++;\n  } catch (_) { failed++; }\n  await new Promise((r) => setTimeout(r, 200));\n}\nif (broadcastId) {\n  await sbRequest($http, 'PATCH', `/rest/v1/broadcasts?id=eq.${broadcastId}`, { status: 'completed', sent_count: sent, failed_count: failed });\n}\nreturn [{ json: { sent, failed } }];"
+      },
+      "id": "bc-send",
+      "name": "Send Broadcast",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Broadcast Trigger": { "main": [[{ "node": "Send Broadcast", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

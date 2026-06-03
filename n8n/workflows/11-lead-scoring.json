@@ -1,0 +1,31 @@
+{
+  "name": "CVPro - Lead Scoring (Intent Detection)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "score-lead",
+        "responseMode": "responseNode"
+      },
+      "id": "ls-webhook",
+      "name": "Score Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\nconst { updateCustomer } = require('/home/node/scripts/cvpro-helpers.js');\nconst { customerId, conversationText } = $input.first().json.body;\nconst prompt = `Analyze buying intent 0-100 and suggest lead stage (new, qualified, analysis_done, offer_sent, negotiation, won, lost). Return JSON: {\"score\": int, \"suggested_stage\": string}. Conversation: ${(conversationText || '').substring(0, 2000)}`;\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nconst result = await rotator.callJSON(prompt, '');\nawait updateCustomer($http, customerId, {\n  buying_intent_score: result.score,\n  lead_stage: result.suggested_stage,\n});\nreturn [{ json: result }];"
+      },
+      "id": "ls-score",
+      "name": "Score & Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Score Trigger": { "main": [[{ "node": "Score & Update", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

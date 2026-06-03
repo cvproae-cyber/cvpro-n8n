@@ -1,0 +1,12 @@
+{
+  "projectRef": "ityxmafonqiffpmdrpar",
+  "projectName": "CV PRO CRM",
+  "region": "eu-west-1",
+  "url": "https://ityxmafonqiffpmdrpar.supabase.co",
+  "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0eXhtYWZvbnFpZmZwbWRycGFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4MDU4MTksImV4cCI6MjA5NTM4MTgxOX0.ydfa_ERejDT7Lb_8uq1uggz0UWM7p7R-oz2DmdvHRX8",
+  "dbHost": "aws-0-eu-west-1.pooler.supabase.com",
+  "dbUser": "postgres.ityxmafonqiffpmdrpar",
+  "dbSchema": "public",
+  "n8nDbSchema": "n8n",
+  "storageBucket": "cv-files"
+}

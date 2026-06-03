@@ -1,0 +1,29 @@
+{
+  "name": "CVPro - Memory System (pgvector)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "minutes": 15 }] }
+      },
+      "id": "mem-cron",
+      "name": "Run every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { sbRequest } = require('/home/node/scripts/cvpro-helpers.js');\nconst { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\n\nconst fifteenMinsAgo = new Date(Date.now() - 15 * 60000).toISOString();\nconst newMessages = await sbRequest(\n  $http,\n  'GET',\n  `/rest/v1/messages?created_at=gt.${fifteenMinsAgo}&direction=eq.inbound&select=id,content,conversation_id&conversation_id=not.is.null`\n);\n\nif (!newMessages?.length) return [{ json: { embedded: 0 } }];\n\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nconst results = [];\n\nfor (const msg of newMessages) {\n  if (!msg.content?.trim()) continue;\n\n  const convRows = await sbRequest(\n    $http,\n    'GET',\n    `/rest/v1/conversations?id=eq.${msg.conversation_id}&select=customer_id&limit=1`\n  );\n  const customerId = convRows?.[0]?.customer_id;\n  if (!customerId) continue;\n\n  try {\n    const embedding = await rotator.embed(msg.content);\n    await sbRequest($http, 'POST', '/rest/v1/vector_memory', {\n      customer_id: customerId,\n      embedding,\n      text_chunk: msg.content.substring(0, 500),\n    });\n    results.push({ customer_id: customerId, embedded: true });\n  } catch (_) {\n    results.push({ customer_id: customerId, embedded: false });\n  }\n}\n\nreturn [{ json: { count: results.length, results } }];"
+      },
+      "id": "mem-embed",
+      "name": "Embed New Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Run every 15 min": { "main": [[{ "node": "Embed New Messages", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

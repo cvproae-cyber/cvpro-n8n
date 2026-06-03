@@ -1,0 +1,134 @@
+{
+  "name": "CVPro - Instagram AI Agent (Full)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "instagram",
+        "responseMode": "responseNode"
+      },
+      "id": "ig-verify-webhook",
+      "name": "Instagram Verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 100],
+      "webhookId": "cvpro-ig-verify"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { verifyMetaWebhook } = require('/home/node/scripts/cvpro-helpers.js');\nconst query = $input.first().json.query || {};\nconst result = verifyMetaWebhook(query, process.env.INSTAGRAM_VERIFY_TOKEN);\nreturn [{ json: result }];"
+      },
+      "id": "ig-verify-code",
+      "name": "Verify Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.verified ? $json.challenge : 'Forbidden' }}",
+        "options": { "responseCode": "={{ $json.verified ? 200 : 403 }}" }
+      },
+      "id": "ig-verify-respond",
+      "name": "Return Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [750, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instagram",
+        "responseMode": "responseNode"
+      },
+      "id": "ig-webhook",
+      "name": "Instagram Webhook (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "cvpro-ig-main"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": { "responseCode": 200 }
+      },
+      "id": "ig-ack",
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst entry = body?.entry?.[0];\nconst messaging = entry?.messaging?.[0];\nif (messaging?.message?.text) {\n  return [{ json: { type: 'dm', from: messaging.sender.id, text: messaging.message.text, pageId: entry.id, timestamp: messaging.timestamp } }];\n}\nconst changes = entry?.changes?.[0];\nif (changes?.field === 'comments' && changes?.value?.message) {\n  return [{ json: { type: 'comment', from: changes.value.from.id, fromName: changes.value.from.name, text: changes.value.message, commentId: changes.value.id, mediaId: changes.value.media?.id, pageId: entry.id } }];\n}\nreturn [];"
+      },
+      "id": "ig-extract",
+      "name": "Extract Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "leftValue": "={{ $json.type }}", "rightValue": "dm", "operator": { "type": "string", "operation": "equals" } }]
+        }
+      },
+      "id": "ig-router",
+      "name": "DM or Comment",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const {\n  getOrCreateCustomer,\n  getOrCreateConversation,\n  getMessageHistory,\n  formatHistory,\n  saveMessage,\n  updateCustomer,\n} = require('/home/node/scripts/cvpro-helpers.js');\nconst { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\n\nconst { text: userMsg, from: senderId, pageId } = $input.first().json;\n\nconst customer = await getOrCreateCustomer($http, { instagram_id: senderId });\nconst conversation = await getOrCreateConversation($http, customer.id, 'instagram');\n\nif (conversation.human_takeover) {\n  return [{ json: { skipReply: true, from: senderId, pageId } }];\n}\n\nawait saveMessage($http, conversation.id, 'inbound', userMsg, { is_ai_generated: false });\n\nconst messages = await getMessageHistory($http, conversation.id, 10);\nconst history = formatHistory(messages);\n\nconst systemPrompt = `أنت وكيل مبيعات CVPro.ae على إنستاجرام. الأسعار: Essential 399 | LinkedIn 299 | Career Boost 599 | Executive 999 درهم. رد مختصر وودي.\\n${history}`;\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nlet aiReply = '';\ntry {\n  aiReply = await rotator.call(userMsg, systemPrompt, 300, 0.7);\n} catch (_) {\n  aiReply = 'مرحباً! كيف أساعدك اليوم؟ 😊';\n}\n\nawait saveMessage($http, conversation.id, 'outbound', aiReply, { is_ai_generated: true, ai_model: 'gemini-2.5-flash' });\nawait updateCustomer($http, customer.id, { last_interaction: new Date().toISOString() });\n\nreturn [{ json: { reply: aiReply, from: senderId, pageId } }];"
+      },
+      "id": "ig-ai-dm",
+      "name": "AI Reply DM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.pageId }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.INSTAGRAM_ACCESS_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"recipient\":{\"id\":\"{{ $json.from }}\"},\"message\":{\"text\":\"{{ $json.reply }}\"},\"messaging_type\":\"RESPONSE\"}"
+      },
+      "id": "ig-send-dm",
+      "name": "Send DM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { GeminiRotator } = require('/home/node/scripts/gemini-rotation.js');\nconst commentText = $input.first().json.text;\nconst commentId = $input.first().json.commentId;\nconst prompt = `أنت مساعد CVPro.ae. رد على تعليق: \"${commentText}\" برد قصير (جملتين) وادعُ للـ DM. لا تذكر الأسعار.`;\nconst rotator = new GeminiRotator(process.env.GEMINI_API_KEYS.split(','));\nlet reply = '';\ntry {\n  reply = await rotator.call(prompt, '', 80, 0.5);\n} catch (_) {\n  reply = 'شكراً لتعليقك! 😊 راسلنا على الـ DM للمزيد.';\n}\nawait $http.request({\n  method: 'POST',\n  url: `https://graph.facebook.com/v21.0/${commentId}/replies`,\n  headers: { Authorization: `Bearer ${process.env.INSTAGRAM_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },\n  body: { message: reply },\n});\nreturn [{ json: { success: true, commentId, reply } }];"
+      },
+      "id": "ig-ai-comment",
+      "name": "AI Reply Comment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 500]
+    }
+  ],
+  "connections": {
+    "Instagram Verify (GET)": { "main": [[{ "node": "Verify Token", "type": "main", "index": 0 }]] },
+    "Verify Token": { "main": [[{ "node": "Return Challenge", "type": "main", "index": 0 }]] },
+    "Instagram Webhook (POST)": { "main": [[{ "node": "Acknowledge", "type": "main", "index": 0 }, { "node": "Extract Data", "type": "main", "index": 0 }]] },
+    "Extract Data": { "main": [[{ "node": "DM or Comment", "type": "main", "index": 0 }]] },
+    "DM or Comment": { "main": [[{ "node": "AI Reply DM", "type": "main", "index": 0 }], [{ "node": "AI Reply Comment", "type": "main", "index": 0 }]] },
+    "AI Reply DM": { "main": [[{ "node": "Send DM", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
