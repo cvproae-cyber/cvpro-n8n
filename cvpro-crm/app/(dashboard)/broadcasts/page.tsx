@@ -18,12 +18,27 @@ export default function BroadcastsPage() {
   const { data: broadcasts, isLoading, refetch } = useListBroadcasts();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", channel: "whatsapp", message: "" });
 
+  // حساب الإحصائيات ديناميكياً
+  const totalSent = broadcasts?.reduce((a, b) => a + (b.sent_count || 0), 0) || 0;
+  const totalDelivered = broadcasts?.reduce((a, b) => a + (b.delivered_count || 0), 0) || 0;
+  const deliveryRate = totalSent > 0 ? Math.round((totalDelivered / totalSent) * 100) : 0;
+  const avgOpenRate = totalSent > 0 ? 52 : 0; // يمكن ربطها لاحقاً بجدول التعليقات
+
   const handleCreate = async () => {
-    if (!form.name || !form.message) { toast({ title: "Fill required fields", variant: "destructive" }); return; }
-    // هنا يمكنك استدعاء API لإنشاء broadcast (مؤقتاً نستخدم console)
+    if (!form.name || !form.message) { 
+      toast({ title: "برجاء ملء البيانات", variant: "destructive" }); 
+      return; 
+    }
+    setIsSubmitting(true);
+    
+    // المحاكاة لعملية الإرسال (يجب استبدالها بـ API call)
+    await new Promise(r => setTimeout(r, 1000));
+
     toast({ title: "Broadcast created (demo)" });
+    setIsSubmitting(false);
     setOpen(false);
     setForm({ name: "", channel: "whatsapp", message: "" });
     refetch();
@@ -42,15 +57,17 @@ export default function BroadcastsPage() {
               <Select value={form.channel} onValueChange={(v) => setForm({ ...form, channel: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="whatsapp">WhatsApp</SelectItem><SelectItem value="instagram">Instagram</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select>
               <Textarea placeholder="Message content" rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
             </div>
-            <DialogFooter><Button onClick={handleCreate}>Create</Button></DialogFooter>
+            <DialogFooter>
+              <Button onClick={handleCreate} disabled={isSubmitting}>{isSubmitting ? "Sending..." : "Create"}</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card><CardHeader><CardTitle className="text-sm text-muted-foreground">Total Sent</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{broadcasts?.reduce((a,b) => a + (b.sent_count||0), 0) || 0}</div></CardContent></Card>
-        <Card><CardHeader><CardTitle className="text-sm text-muted-foreground">Delivery Rate</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">78%</div></CardContent></Card>
-        <Card><CardHeader><CardTitle className="text-sm text-muted-foreground">Avg Open Rate</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">52%</div></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-sm text-muted-foreground">Total Sent</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalSent}</div></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-sm text-muted-foreground">Delivery Rate</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{deliveryRate}%</div></CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-sm text-muted-foreground">Avg Open Rate</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{avgOpenRate}%</div></CardContent></Card>
       </div>
 
       <Card>
