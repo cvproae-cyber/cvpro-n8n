@@ -13,12 +13,8 @@ export interface Customer {
   tags?: string[];
   cv_analysis?: any;
   created_at?: string;
-  
-  // 🔽 Missing fields that cause the current error
-  buying_intent_score?: number;    // ← add this
-  last_interaction?: string;       // ← add this (timestamp string)
-  
-  // Also good to include (used elsewhere)
+  buying_intent_score?: number;
+  last_interaction?: string;
   assigned_agent?: string;
   notes?: string;
   meta?: Record<string, any>;

@@ -1,3 +1,5 @@
+import pdf from 'pdf-parse';
+
 /**
  * Very small helper to extract text from a public storage path or File
  * - If given a File, we read it locally
@@ -11,13 +13,15 @@ export async function extractTextFromFile(input: File | string) {
       if (!res.ok) throw new Error(`Fetch failed: ${res.statusText}`);
       
       const blob = await res.blob();
+
+      if (blob.type.includes('pdf')) {
+        const buffer = Buffer.from(await blob.arrayBuffer());
+        const data = await pdf(buffer);
+        return data.text.slice(0, 20000);
+      }
+
+      if (blob.type.includes('word')) return "[Docx Extraction Not Implemented - Please use PDF]";
       
-      /**
-       * ملاحظة: لاستخراج النصوص من PDF فعلياً، يفضل استخدام Edge Functions 
-       * أو مكتبة مثل 'pdf-parse' في Server Action.
-       * حالياً يتم التعامل مع الملفات النصية فقط.
-       */
-      if (blob.type.includes('pdf') || blob.type.includes('word')) return "[Binary File - Text Extraction Requires OCR/Parser]";
       const text = await (new Response(blob).text());
       return text.slice(0, 20000); // limit
     } catch (e) {
@@ -28,7 +32,12 @@ export async function extractTextFromFile(input: File | string) {
 
   // File path: try to extract text for common types (pdf/docx not implemented here)
   try {
-    if (input.type.includes('pdf') || input.type.includes('word')) return "[Binary File - Text Extraction Requires OCR/Parser]";
+    if (input.type.includes('pdf')) {
+      const buffer = Buffer.from(await input.arrayBuffer());
+      const data = await pdf(buffer);
+      return data.text.slice(0, 20000);
+    }
+    if (input.type.includes('word')) return "[Docx Extraction Not Implemented - Please use PDF]";
     const text = await input.text();
     return text.slice(0, 20000);
   } catch (e) {
