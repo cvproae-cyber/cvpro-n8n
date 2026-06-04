@@ -43,12 +43,12 @@ export default function BroadcastsPage() {
 
       if (!response.ok) throw new Error('Failed to create broadcast');
 
-      toast({ title: "تم إنشاء الحملة بنجاح" });
+      toast({ title: "تم إنشاء الحملة بنجاح", description: "جاري المعالجة عبر n8n" });
       setOpen(false);
       setForm({ name: "", channel: "whatsapp", message: "" });
       refetch();
     } catch (error) {
-      toast({ title: "خطأ في الإرسال", variant: "destructive" });
+      toast({ title: "خطأ في الاتصال", description: "تأكد من إعداد Webhook n8n", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
