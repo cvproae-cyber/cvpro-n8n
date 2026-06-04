@@ -6,9 +6,12 @@ const nextConfig = {
     typescript: {
         ignoreBuildErrors: true,
     },
-    // Help Vercel's tracer correctly map route groups and external dependencies
     serverExternalPackages: ['@supabase/supabase-js', '@supabase/ssr'],
-    skipMiddlewareUrlNormalize: true,
+    experimental: {
+        serverMinification: false,
+        // تحسين معالجة حزم الأيقونات والرسوم البيانية لتقليل حجم الـ Build
+        optimizePackageImports: ['lucide-react', 'recharts'],
+    },
 };
 
 export default nextConfig;
