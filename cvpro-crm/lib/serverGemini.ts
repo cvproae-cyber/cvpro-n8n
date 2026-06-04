@@ -2,11 +2,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const API_KEYS = process.env.GEMINI_API_KEYS?.split(",") || [];
 let currentIdx = 0;
+const MODEL_NAME = "gemini-1.5-flash"; // Flash is faster and cheaper for CRM tasks
 
 async function callWithKey(key: string, prompt: string, temperature = 0.7) {
   const genAI = new GoogleGenerativeAI(key);
-  // Use gemini-1.5-pro or flash depending on preference, but pro is configured here
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature },

@@ -58,13 +58,15 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const { pathname } = request.nextUrl;
+
   // 1. If user is NOT logged in and trying to access dashboard routes, redirect to /login
-  if (!user && !request.nextUrl.pathname.startsWith("/login") && request.nextUrl.pathname !== "/") {
+  if (!user && !pathname.startsWith("/login") && pathname !== "/") {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // 2. If user IS logged in and trying to access /login, redirect to dashboard
-  if (user && request.nextUrl.pathname.startsWith("/login")) {
+  if (user && pathname.startsWith("/login")) {
     return NextResponse.redirect(new URL("/pipeline", request.url)); // Default dashboard page
   }
 
