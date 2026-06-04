@@ -155,6 +155,14 @@ CREATE TABLE IF NOT EXISTS agents (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- ── SYSTEM SETTINGS ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS system_settings (
+  key         TEXT PRIMARY KEY,
+  value       JSONB,
+  description TEXT,
+  updated_at  TIMESTAMPTZ DEFAULT now()
+);
+
 -- ── PERFORMANCE INDEXES ───────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_customers_lead_stage   ON customers(lead_stage);
 CREATE INDEX IF NOT EXISTS idx_customers_intent       ON customers(buying_intent_score);
@@ -193,6 +201,7 @@ ALTER TABLE broadcasts       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE templates        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_analytics  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agents           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE system_settings   ENABLE ROW LEVEL SECURITY;
 
 -- Drop old permissive policies if re-running
 DROP POLICY IF EXISTS service_all_customers ON customers;
@@ -224,6 +233,9 @@ CREATE POLICY anon_read_broadcasts ON broadcasts FOR SELECT TO anon USING (true)
 
 DROP POLICY IF EXISTS anon_read_agents ON agents;
 CREATE POLICY anon_read_agents ON agents FOR SELECT TO anon USING (true);
+
+DROP POLICY IF EXISTS anon_read_settings ON system_settings;
+CREATE POLICY anon_read_settings ON system_settings FOR SELECT TO anon USING (true);
 
 -- ── REALTIME (Appsmith live updates) ──────────────────────────
 ALTER TABLE customers     REPLICA IDENTITY FULL;
@@ -327,5 +339,9 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO agents (email, full_name, role) VALUES
   ('admin@cvpro.ae', 'CVPro Admin', 'admin')
 ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO system_settings (key, value, description) VALUES
+  ('default_ai_mode', 'true', 'تفعيل الرد الآلي تلقائياً للمحادثات الجديدة')
+ON CONFLICT (key) DO NOTHING;
 
 SELECT 'CVPro schema installed successfully ✅' AS status;
