@@ -33,7 +33,6 @@ export async function POST(req: Request) {
     if (dbError) throw dbError;
 
     // 3. إرسال إشارة البدء إلى n8n Webhook
-    // تأكد من إضافة N8N_BROADCAST_WEBHOOK_URL في ملف .env
     const n8nWebhookUrl = process.env.N8N_BROADCAST_WEBHOOK_URL;
 
     if (n8nWebhookUrl) {

@@ -34,14 +34,24 @@ export default function BroadcastsPage() {
     }
     setIsSubmitting(true);
     
-    // المحاكاة لعملية الإرسال (يجب استبدالها بـ API call)
-    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const response = await fetch('/api/broadcasts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
 
-    toast({ title: "Broadcast created (demo)" });
-    setIsSubmitting(false);
-    setOpen(false);
-    setForm({ name: "", channel: "whatsapp", message: "" });
-    refetch();
+      if (!response.ok) throw new Error('Failed to create broadcast');
+
+      toast({ title: "تم إنشاء الحملة بنجاح" });
+      setOpen(false);
+      setForm({ name: "", channel: "whatsapp", message: "" });
+      refetch();
+    } catch (error) {
+      toast({ title: "خطأ في الإرسال", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
