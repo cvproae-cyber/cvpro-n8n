@@ -11,8 +11,8 @@ async function callWithKey(key: string, prompt: string, temperature = 0.7) {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature },
   });
-  const response = result.response;
-  const text = response.text ? response.text() : "";
+  const response = await result.response;
+  const text = typeof response.text === 'function' ? response.text() : "";
   if (!text) throw new Error("Empty response from Gemini");
   return text;
 }
