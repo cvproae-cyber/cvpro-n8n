@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
@@ -14,41 +14,21 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         get(name: string) {
-          return request.cookies.get(name)?.value;
+          return request.cookies.get(name)?.value
         },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          });
+        set(name: string, value: string, options: any) {
+          request.cookies.set({ name, value, ...options })
           response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          });
+            request: { headers: request.headers },
+          })
+          response.cookies.set({ name, value, ...options })
         },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: "",
-            ...options,
-          });
+        remove(name: string, options: any) {
+          request.cookies.set({ name, value: '', ...options })
           response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value: "",
-            ...options,
-          });
+            request: { headers: request.headers },
+          })
+          response.cookies.set({ name, value: '', ...options })
         },
       },
     }
@@ -59,29 +39,22 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  const isAuthPage = pathname.startsWith("/login");
+  const isRoot = pathname === "/";
 
-  // 1. If user is NOT logged in and trying to access dashboard routes, redirect to /login
-  if (!user && !pathname.startsWith("/login") && pathname !== "/") {
+  // Redirect unauthenticated users to login, except for the landing page
+  if (!user && !isAuthPage && !isRoot) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // 2. If user IS logged in and trying to access /login, redirect to dashboard
-  if (user && pathname.startsWith("/login")) {
-    return NextResponse.redirect(new URL("/pipeline", request.url)); // Default dashboard page
+  // Redirect logged-in users away from auth pages
+  if (user && isAuthPage) {
+    return NextResponse.redirect(new URL("/pipeline", request.url));
   }
 
   return response;
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/|auth/).*)"],
 };
