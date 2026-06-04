@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const API_KEYS = process.env.GEMINI_API_KEYS?.split(",") || [];
 let currentIdx = 0;
-const MODEL_NAME = "gemini-1.5-flash"; // Flash is faster and cheaper for CRM tasks
+const MODEL_NAME = "gemini-1.5-flash"; 
 
 async function callWithKey(key: string, prompt: string, temperature = 0.7) {
   const genAI = new GoogleGenerativeAI(key);
@@ -11,7 +11,10 @@ async function callWithKey(key: string, prompt: string, temperature = 0.7) {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature },
   });
-  return result.response.text();
+  const response = await result.response;
+  const text = response.text();
+  if (!text) throw new Error("Empty response from Gemini");
+  return text;
 }
 
 /**
@@ -33,8 +36,14 @@ export async function serverCallGemini(prompt: string, temperature = 0.7, maxRet
         // On success, update currentIdx to start from the NEXT key for the next request
         currentIdx = (idx + 1) % totalKeys;
         return text;
-      } catch (err) {
-        console.warn(`Server Gemini key failed (Index ${idx}):`, err);
+      } catch (err: any) {
+        const isRateLimit = err?.message?.includes('429') || err?.status === 429;
+        if (isRateLimit) {
+          console.warn(`Gemini Key at index ${idx} rate limited. Trying next key...`);
+        } else {
+          console.warn(`Server Gemini key failed (Index ${idx}):`, err.message || err);
+        }
+        // Continue to the next key in the pool
       }
     }
     
