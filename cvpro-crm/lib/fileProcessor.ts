@@ -11,8 +11,12 @@ export async function extractTextFromFile(input: File | string) {
       if (!res.ok) throw new Error(`Fetch failed: ${res.statusText}`);
       
       const blob = await res.blob();
-      // Basic check: if it's a PDF or Word, standard .text() will return garbage.
-      // Real implementation would need a library like pdf-parse.
+      
+      /**
+       * ملاحظة: لاستخراج النصوص من PDF فعلياً، يفضل استخدام Edge Functions 
+       * أو مكتبة مثل 'pdf-parse' في Server Action.
+       * حالياً يتم التعامل مع الملفات النصية فقط.
+       */
       if (blob.type.includes('pdf') || blob.type.includes('word')) return "[Binary File - Text Extraction Requires OCR/Parser]";
       const text = await (new Response(blob).text());
       return text.slice(0, 20000); // limit
