@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    // تفعيل وضع Standalone للعمل بكفاءة على Docker و Cloud Run
+    output: 'standalone',
     eslint: {
         ignoreDuringBuilds: true,
     },
