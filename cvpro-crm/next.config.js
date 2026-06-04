@@ -5,13 +5,9 @@ const nextConfig = {
     },
     typescript: {
         ignoreBuildErrors: true,
-    },
-    serverExternalPackages: ['@supabase/supabase-js', '@supabase/ssr'],
-    experimental: {
-        serverMinification: false,
-        // تحسين معالجة حزم الأيقونات والرسوم البيانية لتقليل حجم الـ Build
-        optimizePackageImports: ['lucide-react', 'recharts'],
-    },
+    }
+    // Note: We removed serverMinification as it was causing a '⨯' in your logs
+    // and simplified the config for maximum stability on Vercel.
 };
 
 export default nextConfig;
